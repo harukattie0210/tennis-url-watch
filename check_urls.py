@@ -58,4 +58,83 @@ def extract_hard_tennis_text(html: str) -> str:
     return "\n".join(unique)
 
 
-def sha256(s: str) -
+def sha256(s: str) -> str:
+    return hashlib.sha256(s.encode("utf-8", errors="ignore")).hexdigest()
+
+
+def load_state() -> dict:
+    if not os.path.exists(STATE_FILE):
+        return {}
+    with open(STATE_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_state(state: dict) -> None:
+    with open(STATE_FILE, "w", encoding="utf-8") as f:
+        json.dump(state, f, ensure_ascii=False, indent=2)
+
+
+def send_mail(subject: str, body: str) -> None:
+    if not (FROM_EMAIL and TO_EMAIL and APP_PASSWORD):
+        raise RuntimeError("メール設定が未入力です（Secrets: WATCH_FROM_EMAIL / WATCH_TO_EMAIL / WATCH_APP_PASSWORD）")
+
+    msg = MIMEText(body, "plain", "utf-8")
+    msg["Subject"] = subject
+    msg["From"] = FROM_EMAIL
+    msg["To"] = TO_EMAIL
+
+    context = ssl.create_default_context()
+    with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, context=context) as server:
+        server.login(FROM_EMAIL, APP_PASSWORD)
+        server.send_message(msg)
+
+
+def main():
+    html = fetch_html(TARGET_URL)
+    tennis_text = extract_hard_tennis_text(html)
+
+    # もしページ構造変化等で抽出が空になった場合は、誤通知を避けるため通知しない
+    if not tennis_text.strip():
+        print("No hard tennis text found; skip notify to avoid false positives.")
+        return
+
+    new_hash = sha256(tennis_text)
+    state = load_state()
+
+    old_hash = state.get("hard_tennis_hash")
+    old_text = state.get("hard_tennis_text", "")
+
+    # 初回は記録のみ（通知なし）
+    if not old_hash:
+        state["hard_tennis_hash"] = new_hash
+        state["hard_tennis_text"] = tennis_text
+        save_state(state)
+        print("Initialized state (no email).")
+        return
+
+    if new_hash != old_hash:
+        now_jst = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
+        subject = "【硬式テニス】DI-KSP 教室情報に更新がありました"
+        body = (
+            f"更新を検知しました（{now_jst}）\n\n"
+            f"対象ページ: {TARGET_URL}\n\n"
+            "▼ 現在の『硬式テニス』関連抽出（最新版）\n"
+            "----------------------------------------\n"
+            f"{tennis_text}\n\n"
+            "▼ 前回の抽出（参考）\n"
+            "----------------------------------------\n"
+            f"{old_text}\n"
+        )
+        send_mail(subject, body)
+
+        # state更新（次回比較用）
+        state["hard_tennis_hash"] = new_hash
+        state["hard_tennis_text"] = tennis_text
+        save_state(state)
+        print("Updated & notified.")
+    else:
+        print("No change.")
+
+
+if __name__ == "__main__":
+    main()
