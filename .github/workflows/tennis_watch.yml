@@ -3,8 +3,8 @@ name: tennis-watch
 on:
   workflow_dispatch:
   schedule:
-    # 毎日 09:00 JST = 00:00 UTC
-    - cron: "0 0 * * *"
+    # 毎日 12:00 JST = 03:00 UTC
+    - cron: "0 3 * * *"
 
 permissions:
   contents: write
