@@ -114,7 +114,7 @@ def main():
 
     if new_hash != old_hash:
         now_jst = datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
-        subject = "【硬式テニス】DI-KSP 教室情報に更新がありました"
+        subject = "【硬式テニス】教室情報に更新がありました"
         body = (
             f"更新を検知しました（{now_jst}）\n\n"
             f"対象ページ: {TARGET_URL}\n\n"
